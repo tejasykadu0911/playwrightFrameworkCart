@@ -1,0 +1,187 @@
+pipeline {
+    agent any
+
+    environment {
+        DEV_REPO        = 'https://github.com/tejasykadu0911/freeCRMTestApplication'
+        TEST_REPO       = 'https://github.com/tejasykadu0911/playwrightFrameworkCart'
+        DEV_DIR         = 'freeCRMTestApplication'
+        TEST_DIR        = 'playwrightFrameworkCart'
+        ALLURE_RESULTS  = 'allure-results'
+        NODE_VERSION    = '18'
+    }
+
+    tools {
+        nodejs "NodeJS-${NODE_VERSION}"   // Must match the name configured in Jenkins → Global Tool Configuration
+    }
+
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        timeout(time: 30, unit: 'MINUTES')
+    }
+
+    stages {
+
+        // ─────────────────────────────────────────────
+        // STAGE 1: Checkout both repos
+        // ─────────────────────────────────────────────
+        stage('Checkout Repositories') {
+            parallel {
+                stage('Checkout Dev App') {
+                    steps {
+                        echo "Cloning Dev Repo: ${DEV_REPO}"
+                        dir("${DEV_DIR}") {
+                            git branch: 'main',
+                                url: "${DEV_REPO}"
+                        }
+                    }
+                }
+                stage('Checkout Test Automation') {
+                    steps {
+                        echo "Cloning Test Repo: ${TEST_REPO}"
+                        dir("${TEST_DIR}") {
+                            git branch: 'main',
+                                url: "${TEST_REPO}"
+                        }
+                    }
+                }
+            }
+        }
+
+        // ─────────────────────────────────────────────
+        // STAGE 2: Install Dev App dependencies
+        // ─────────────────────────────────────────────
+        stage('Install Dev App Dependencies') {
+            steps {
+                dir("${DEV_DIR}") {
+                    echo 'Installing dev app dependencies...'
+                    sh 'npm ci'
+                }
+            }
+        }
+
+        // ─────────────────────────────────────────────
+        // STAGE 3: Start Dev Application
+        // ─────────────────────────────────────────────
+        stage('Start Dev Application') {
+            steps {
+                dir("${DEV_DIR}") {
+                    echo 'Starting the dev application in background...'
+                    sh '''
+                        nohup npm start > ../app.log 2>&1 &
+                        echo $! > ../app.pid
+                        echo "App started with PID: $(cat ../app.pid)"
+
+                        # Wait for app to be ready (adjust port as needed)
+                        echo "Waiting for app to be ready..."
+                        for i in $(seq 1 30); do
+                            if curl -s http://localhost:3000 > /dev/null 2>&1; then
+                                echo "App is ready!"
+                                break
+                            fi
+                            echo "Attempt $i/30 - waiting 2 seconds..."
+                            sleep 2
+                        done
+                    '''
+                }
+            }
+        }
+
+        // ─────────────────────────────────────────────
+        // STAGE 4: Install Test Framework dependencies
+        // ─────────────────────────────────────────────
+        stage('Install Test Dependencies') {
+            steps {
+                dir("${TEST_DIR}") {
+                    echo 'Installing Playwright test dependencies...'
+                    sh 'npm ci'
+                    sh 'npx playwright install --with-deps chromium'
+                }
+            }
+        }
+
+        // ─────────────────────────────────────────────
+        // STAGE 5: Run Playwright Tests
+        // ─────────────────────────────────────────────
+        stage('Run Playwright Tests') {
+            steps {
+                dir("${TEST_DIR}") {
+                    echo 'Running Playwright tests...'
+                    sh '''
+                        npx playwright test \
+                            --reporter=list,allure-playwright \
+                            --output=../test-results
+                    '''
+                }
+            }
+            post {
+                always {
+                    // Copy allure results to workspace root
+                    sh '''
+                        mkdir -p ${ALLURE_RESULTS}
+                        cp -r ${TEST_DIR}/allure-results/* ${ALLURE_RESULTS}/ 2>/dev/null || true
+                    '''
+                }
+            }
+        }
+
+        // ─────────────────────────────────────────────
+        // STAGE 6: Generate Allure Report
+        // ─────────────────────────────────────────────
+        stage('Generate Allure Report') {
+            steps {
+                echo 'Generating Allure Report...'
+                allure([
+                    includeProperties: false,
+                    jdk: '',
+                    reportBuildPolicy: 'ALWAYS',
+                    results: [[path: "${ALLURE_RESULTS}"]]
+                ])
+            }
+        }
+    }
+
+    // ─────────────────────────────────────────────
+    // POST: Cleanup & Notifications
+    // ─────────────────────────────────────────────
+    post {
+        always {
+            echo 'Stopping dev application...'
+            sh '''
+                if [ -f app.pid ]; then
+                    PID=$(cat app.pid)
+                    kill $PID 2>/dev/null || true
+                    rm -f app.pid
+                    echo "App with PID $PID stopped."
+                fi
+            '''
+
+            // Archive test artifacts
+            archiveArtifacts artifacts: 'test-results/**/*', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'app.log', allowEmptyArchive: true
+
+            // Publish Playwright HTML report if exists
+            publishHTML(target: [
+                allowMissing         : true,
+                alwaysLinkToLastBuild: true,
+                keepAll              : true,
+                reportDir            : "${TEST_DIR}/playwright-report",
+                reportFiles          : 'index.html',
+                reportName           : 'Playwright HTML Report'
+            ])
+        }
+
+        success {
+            echo "✅ Pipeline PASSED — All tests completed successfully!"
+        }
+
+        failure {
+            echo "❌ Pipeline FAILED — Check Allure report and logs for details."
+        }
+
+        unstable {
+            echo "⚠️  Pipeline UNSTABLE — Some tests failed. Review Allure report."
+        }
+    }
+}
