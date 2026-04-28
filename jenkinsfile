@@ -1,145 +1,41 @@
 pipeline {
     agent any
 
-    environment {
-        DEV_REPO        = 'https://github.com/tejasykadu0911/freeCRMTestApplication'
-        TEST_REPO       = 'https://github.com/tejasykadu0911/playwrightFrameworkCart'
-        DEV_DIR         = 'freeCRMTestApplication'
-        TEST_DIR        = 'playwrightFrameworkCart'
-        ALLURE_RESULTS  = "${TEST_DIR}/target/allure-results"
-        JAVA_VERSION    = '17'
-        MAVEN_OPTS      = '-Xmx1024m'
-    }
-
     tools {
-        jdk   "JDK-${JAVA_VERSION}"    // Must match name in Jenkins → Global Tool Configuration
-        maven "Maven-3.9"              // Must match name in Jenkins → Global Tool Configuration
-    }
-
-    options {
-        timestamps()
-        disableConcurrentBuilds()
-        buildDiscarder(logRotator(numToKeepStr: '10'))
-        timeout(time: 60, unit: 'MINUTES')
+        maven 'Maven'        // Name set in Jenkins Global Tools
+        allure 'allure'      // Name set in Jenkins Global Tools
     }
 
     stages {
 
-        // ─────────────────────────────────────────────
-        // STAGE 1: Checkout both repos
-        // ─────────────────────────────────────────────
-                stage('Checkout Test Automation') {
-                    steps {
-                        echo "Cloning Test Repo: ${TEST_REPO}"
-                        dir("${TEST_DIR}") {
-                            git branch: 'main',
-                                url: "${TEST_REPO}"
-                        }
-                    }
-                }
-            }
-        }
-
-
-        // ─────────────────────────────────────────────
-        // STAGE 4: Build Test Automation Framework
-        // ─────────────────────────────────────────────
-        stage('Build Test Framework') {
+        stage('Checkout') {
             steps {
-                dir("${TEST_DIR}") {
-                    echo 'Compiling test automation framework...'
-                    sh 'mvn clean compile -DskipTests'
-                }
+                git branch: 'main',
+                        url: 'https://github.com/tejasykadu0911/freeCRMTestApplication.git',
+                        credentialsId: 'tejasykadu0911'
             }
         }
 
-        // ─────────────────────────────────────────────
-        // STAGE 5: Run Regression Tests
-        // ─────────────────────────────────────────────
-        stage('Run Regression Tests') {
+        stage('Run Tests') {
             steps {
-                dir("${TEST_DIR}") {
-                    echo 'Running regression suite: testng_regression.xml'
-                    sh '''
-                        mvn clean test \
-                            -DsuiteXmlFile=testng_regression.xml \
-                            -Dmaven.test.failure.ignore=true
-                    '''
-                }
+                sh 'mvn clean test'
             }
         }
 
-        // ─────────────────────────────────────────────
-        // STAGE 6: Publish TestNG / Surefire Results
-        // ─────────────────────────────────────────────
-        stage('Publish Test Results') {
-            steps {
-                echo 'Publishing TestNG/Surefire XML results...'
-                junit testResults: "${TEST_DIR}/target/surefire-reports/*.xml",
-                      allowEmptyResults: true
-            }
-        }
-
-        // ─────────────────────────────────────────────
-        // STAGE 7: Generate Allure Report
-        // ─────────────────────────────────────────────
         stage('Generate Allure Report') {
             steps {
-                echo 'Generating Allure Report...'
-                allure([
-                    includeProperties: false,
-                    jdk              : '',
-                    reportBuildPolicy: 'ALWAYS',
-                    results          : [[path: "${ALLURE_RESULTS}"]]
-                ])
+                sh 'mvn allure:report'
             }
         }
     }
 
-    // ─────────────────────────────────────────────
-    // POST: Cleanup & Notifications
-    // ─────────────────────────────────────────────
     post {
         always {
-            echo 'Stopping dev application...'
-            sh '''
-                if [ -f app.pid ]; then
-                    PID=$(cat app.pid)
-                    kill $PID 2>/dev/null || true
-                    rm -f app.pid
-                    echo "App with PID $PID stopped."
-                else
-                    echo "No PID file found, app may not have started."
-                fi
-            '''
-
-            // Archive surefire reports and app logs
-            archiveArtifacts artifacts: "${TEST_DIR}/target/surefire-reports/**/*",
-                             allowEmptyArchive: true
-            archiveArtifacts artifacts: 'app.log',
-                             allowEmptyArchive: true
-
-            // Publish TestNG HTML report
-            publishHTML(target: [
-                allowMissing         : true,
-                alwaysLinkToLastBuild: true,
-                keepAll              : true,
-                reportDir            : "${TEST_DIR}/target/surefire-reports",
-                reportFiles          : 'index.html',
-                reportName           : 'TestNG Surefire Report'
+            allure([
+                    includeProperties: false,
+                    jdk: '',
+                    results: [[path: 'allure-results']]
             ])
-        }
-
-        success {
-            echo "✅ Pipeline PASSED — All regression tests completed successfully!"
-        }
-
-        failure {
-            echo "❌ Pipeline FAILED — Check Allure report and app.log for details."
-        }
-
-        unstable {
-            echo "⚠️  Pipeline UNSTABLE — Some tests failed. Review Allure and Surefire reports."
         }
     }
 }
