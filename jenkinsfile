@@ -28,17 +28,6 @@ pipeline {
         // ─────────────────────────────────────────────
         // STAGE 1: Checkout both repos
         // ─────────────────────────────────────────────
-        stage('Checkout Repositories') {
-            parallel {
-                stage('Checkout Dev App') {
-                    steps {
-                        echo "Cloning Dev Repo: ${DEV_REPO}"
-                        dir("${DEV_DIR}") {
-                            git branch: 'main',
-                                url: "${DEV_REPO}"
-                        }
-                    }
-                }
                 stage('Checkout Test Automation') {
                     steps {
                         echo "Cloning Test Repo: ${TEST_REPO}"
@@ -51,54 +40,6 @@ pipeline {
             }
         }
 
-        // ─────────────────────────────────────────────
-        // STAGE 2: Build Dev Application
-        // ─────────────────────────────────────────────
-        stage('Build Dev Application') {
-            steps {
-                dir("${DEV_DIR}") {
-                    echo 'Building dev application with Maven...'
-                    sh 'mvn clean package -DskipTests'
-                }
-            }
-        }
-
-        // ─────────────────────────────────────────────
-        // STAGE 3: Start Dev Application
-        // ─────────────────────────────────────────────
-        stage('Start Dev Application') {
-            steps {
-                dir("${DEV_DIR}") {
-                    echo 'Starting dev application in background...'
-                    sh '''
-                        # Start Spring Boot / Java app jar in background
-                        # Adjust the jar name pattern to match your actual build output
-                        JAR_FILE=$(find target -name "*.jar" -not -name "*sources*" | head -1)
-
-                        if [ -z "$JAR_FILE" ]; then
-                            echo "ERROR: No JAR file found in target/. Check your build."
-                            exit 1
-                        fi
-
-                        echo "Starting JAR: $JAR_FILE"
-                        nohup java -jar $JAR_FILE > ../app.log 2>&1 &
-                        echo $! > ../app.pid
-                        echo "App started with PID: $(cat ../app.pid)"
-
-                        # Wait for app to be ready on port 8080 (adjust if different)
-                        echo "Waiting for app to be ready on port 8080..."
-                        for i in $(seq 1 30); do
-                            if curl -s http://localhost:8080 > /dev/null 2>&1; then
-                                echo "App is ready!"
-                                break
-                            fi
-                            echo "Attempt $i/30 - waiting 3 seconds..."
-                            sleep 3
-                        done
-                    '''
-                }
-            }
-        }
 
         // ─────────────────────────────────────────────
         // STAGE 4: Build Test Automation Framework
