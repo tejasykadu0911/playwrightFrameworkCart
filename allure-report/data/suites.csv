@@ -1,0 +1,8 @@
+"DESCRIPTION","DURATION IN MS","NAME","PARENT SUITE","START TIME","STATUS","STOP TIME","SUB SUITE","SUITE","TEST CLASS","TEST METHOD"
+"","459","validateLoginPageTitleTest","Open cart regression PW test suite","2026-04-24","passed","2026-04-24","com.qa.opencart.tests.LoginPageTest","Open Cart Login page Test","com.qa.opencart.tests.LoginPageTest","validateLoginPageTitleTest"
+"","23","homePageTitle","Open cart regression PW test suite","2026-04-24","passed","2026-04-24","com.qa.opencart.tests.HomePageTest","Open Cart Home page Test","com.qa.opencart.tests.HomePageTest","homePageTitle"
+"","422","verifyForgotLinkExistTest","Open cart regression PW test suite","2026-04-24","passed","2026-04-24","com.qa.opencart.tests.LoginPageTest","Open Cart Login page Test","com.qa.opencart.tests.LoginPageTest","verifyForgotLinkExistTest"
+"","470","productSearch","Open cart regression PW test suite","2026-04-24","passed","2026-04-24","com.qa.opencart.tests.HomePageTest","Open Cart Home page Test","com.qa.opencart.tests.HomePageTest","productSearch"
+"","1335","appLoginTest","Open cart regression PW test suite","2026-04-24","passed","2026-04-24","com.qa.opencart.tests.LoginPageTest","Open Cart Login page Test","com.qa.opencart.tests.LoginPageTest","appLoginTest"
+"","457","productSearch","Open cart regression PW test suite","2026-04-24","passed","2026-04-24","com.qa.opencart.tests.HomePageTest","Open Cart Home page Test","com.qa.opencart.tests.HomePageTest","productSearch"
+"","4919","productSearch","Open cart regression PW test suite","2026-04-24","passed","2026-04-24","com.qa.opencart.tests.HomePageTest","Open Cart Home page Test","com.qa.opencart.tests.HomePageTest","productSearch"

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+<suite name="Open cart regression PW test suite" thread-count="2" parallel="tests" verbose="4">
+
+<!--    <suite name="Open cart regression PW test suite" thread-count="2" parallel="tests" verbose="4">-->
+
+    <test name="Open Cart Home page Test">
+        <classes>
+            <!-- Fully qualified name: package.ClassName -->
+            <class name="com.qa.opencart.tests.HomePageTest" />
+        </classes>
+    </test>
+    <test name="Open Cart Login page Test">
+        <classes>
+            <!-- Fully qualified name: package.ClassName -->
+            <class name="com.qa.opencart.tests.LoginPageTest" />
+        </classes>
+    </test>
+</suite>

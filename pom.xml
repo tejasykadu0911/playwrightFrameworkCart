@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>PlaywrightTestNGAuto</groupId>
+    <artifactId>PlaywrightTestNG</artifactId>
+    <version>1.0-SNAPSHOT</version>
+
+    <properties>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <maven.compiler.plugin.version>3.13.0</maven.compiler.plugin.version>
+        <maven.surefire.plugin.version>3.2.5</maven.surefire.plugin.version>
+
+        <!-- Defaults (overridable via -D flags) -->
+        <browser>chrome</browser>
+        <suite>testng_regression.xml</suite>
+
+        <aspectJ.version>1.9.8</aspectJ.version>
+
+    </properties>
+
+    <dependencies>
+        <!-- Source: https://mvnrepository.com/artifact/com.microsoft.playwright/playwright -->
+        <dependency>
+            <groupId>com.microsoft.playwright</groupId>
+            <artifactId>playwright</artifactId>
+            <version>1.59.0</version>
+            <scope>compile</scope>
+        </dependency>
+        <!-- Source: https://mvnrepository.com/artifact/org.testng/testng -->
+        <dependency>
+            <groupId>org.testng</groupId>
+            <artifactId>testng</artifactId>
+            <version>7.12.0</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- Source: https://mvnrepository.com/artifact/io.qameta.allure/allure-testng -->
+        <dependency>
+            <groupId>io.qameta.allure</groupId>
+            <artifactId>allure-testng</artifactId>
+            <version>2.34.0</version>
+            <scope>compile</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.aspectj</groupId>
+            <artifactId>aspectjweaver</artifactId>
+            <version>${aspectJ.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+    </dependencies>
+
+    <build>
+        <plugins>
+
+            <!-- ============================= -->
+            <!--     MAVEN COMPILER PLUGIN     -->
+            <!-- ============================= -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>${maven.compiler.plugin.version}</version>
+                <configuration>
+                    <source>11</source>
+                    <target>11</target>
+                    <encoding>UTF-8</encoding>
+                    <!-- Show all compiler warnings -->
+                    <compilerArgs>
+                        <arg>-Xlint:all</arg>
+                    </compilerArgs>
+                </configuration>
+            </plugin>
+
+            <!-- ============================= -->
+            <!--     MAVEN SUREFIRE PLUGIN     -->
+            <!-- ============================= -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>${maven.surefire.plugin.version}</version>
+                <configuration>
+
+                    <!-- Point to TestNG suite file -->
+                    <suiteXmlFiles>
+                        <suiteXmlFile>src/test/resources/${suite}</suiteXmlFile>
+                    </suiteXmlFiles>
+
+                    <!-- ✅ AspectJ agent — REQUIRED for @Step and @Attachment to work -->
+                    <argLine>
+                        -javaagent:"${settings.localRepository}/org/aspectj/aspectjweaver/${aspectJ.version}/aspectjweaver-${aspectJ.version}.jar"
+                    </argLine>
+
+
+
+                    <!-- Pass browser as system property (-Dbrowser=chrome) -->
+                    <systemPropertyVariables>
+                        <browser>${browser}</browser>
+                    </systemPropertyVariables>
+
+<!--                    &lt;!&ndash; Parallel execution support for ThreadLocal setup &ndash;&gt;-->
+<!--                    <parallel>methods</parallel>-->
+<!--                    <threadCount>2</threadCount>-->
+<!--                    <forkCount>1</forkCount>-->
+<!--                    <reuseForks>true</reuseForks>-->
+
+                    <!-- Don't fail build on test failure (optional) -->
+                    <!-- <testFailureIgnore>true</testFailureIgnore> -->
+
+                    <!-- Show test output in console -->
+                    <useFile>false</useFile>
+
+                </configuration>
+            </plugin>
+
+        </plugins>
+    </build>
+
+
+</project>
