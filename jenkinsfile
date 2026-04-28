@@ -6,19 +6,21 @@ pipeline {
         TEST_REPO       = 'https://github.com/tejasykadu0911/playwrightFrameworkCart'
         DEV_DIR         = 'freeCRMTestApplication'
         TEST_DIR        = 'playwrightFrameworkCart'
-        ALLURE_RESULTS  = 'allure-results'
-        NODE_VERSION    = '18'
+        ALLURE_RESULTS  = "${TEST_DIR}/target/allure-results"
+        JAVA_VERSION    = '17'
+        MAVEN_OPTS      = '-Xmx1024m'
     }
 
     tools {
-        nodejs "NodeJS-${NODE_VERSION}"   // Must match the name configured in Jenkins → Global Tool Configuration
+        jdk   "JDK-${JAVA_VERSION}"    // Must match name in Jenkins → Global Tool Configuration
+        maven "Maven-3.9"              // Must match name in Jenkins → Global Tool Configuration
     }
 
     options {
         timestamps()
         disableConcurrentBuilds()
         buildDiscarder(logRotator(numToKeepStr: '10'))
-        timeout(time: 30, unit: 'MINUTES')
+        timeout(time: 60, unit: 'MINUTES')
     }
 
     stages {
@@ -50,13 +52,13 @@ pipeline {
         }
 
         // ─────────────────────────────────────────────
-        // STAGE 2: Install Dev App dependencies
+        // STAGE 2: Build Dev Application
         // ─────────────────────────────────────────────
-        stage('Install Dev App Dependencies') {
+        stage('Build Dev Application') {
             steps {
                 dir("${DEV_DIR}") {
-                    echo 'Installing dev app dependencies...'
-                    sh 'npm ci'
+                    echo 'Building dev application with Maven...'
+                    sh 'mvn clean package -DskipTests'
                 }
             }
         }
@@ -67,21 +69,31 @@ pipeline {
         stage('Start Dev Application') {
             steps {
                 dir("${DEV_DIR}") {
-                    echo 'Starting the dev application in background...'
+                    echo 'Starting dev application in background...'
                     sh '''
-                        nohup npm start > ../app.log 2>&1 &
+                        # Start Spring Boot / Java app jar in background
+                        # Adjust the jar name pattern to match your actual build output
+                        JAR_FILE=$(find target -name "*.jar" -not -name "*sources*" | head -1)
+
+                        if [ -z "$JAR_FILE" ]; then
+                            echo "ERROR: No JAR file found in target/. Check your build."
+                            exit 1
+                        fi
+
+                        echo "Starting JAR: $JAR_FILE"
+                        nohup java -jar $JAR_FILE > ../app.log 2>&1 &
                         echo $! > ../app.pid
                         echo "App started with PID: $(cat ../app.pid)"
 
-                        # Wait for app to be ready (adjust port as needed)
-                        echo "Waiting for app to be ready..."
+                        # Wait for app to be ready on port 8080 (adjust if different)
+                        echo "Waiting for app to be ready on port 8080..."
                         for i in $(seq 1 30); do
-                            if curl -s http://localhost:3000 > /dev/null 2>&1; then
+                            if curl -s http://localhost:8080 > /dev/null 2>&1; then
                                 echo "App is ready!"
                                 break
                             fi
-                            echo "Attempt $i/30 - waiting 2 seconds..."
-                            sleep 2
+                            echo "Attempt $i/30 - waiting 3 seconds..."
+                            sleep 3
                         done
                     '''
                 }
@@ -89,54 +101,55 @@ pipeline {
         }
 
         // ─────────────────────────────────────────────
-        // STAGE 4: Install Test Framework dependencies
+        // STAGE 4: Build Test Automation Framework
         // ─────────────────────────────────────────────
-        stage('Install Test Dependencies') {
+        stage('Build Test Framework') {
             steps {
                 dir("${TEST_DIR}") {
-                    echo 'Installing Playwright test dependencies...'
-                    sh 'npm ci'
-                    sh 'npx playwright install --with-deps chromium'
+                    echo 'Compiling test automation framework...'
+                    sh 'mvn clean compile -DskipTests'
                 }
             }
         }
 
         // ─────────────────────────────────────────────
-        // STAGE 5: Run Playwright Tests
+        // STAGE 5: Run Regression Tests
         // ─────────────────────────────────────────────
-        stage('Run Playwright Tests') {
+        stage('Run Regression Tests') {
             steps {
                 dir("${TEST_DIR}") {
-                    echo 'Running Playwright tests...'
+                    echo 'Running regression suite: testng_regression.xml'
                     sh '''
-                        npx playwright test \
-                            --reporter=list,allure-playwright \
-                            --output=../test-results
-                    '''
-                }
-            }
-            post {
-                always {
-                    // Copy allure results to workspace root
-                    sh '''
-                        mkdir -p ${ALLURE_RESULTS}
-                        cp -r ${TEST_DIR}/allure-results/* ${ALLURE_RESULTS}/ 2>/dev/null || true
+                        mvn clean test \
+                            -DsuiteXmlFile=testng_regression.xml \
+                            -Dmaven.test.failure.ignore=true
                     '''
                 }
             }
         }
 
         // ─────────────────────────────────────────────
-        // STAGE 6: Generate Allure Report
+        // STAGE 6: Publish TestNG / Surefire Results
+        // ─────────────────────────────────────────────
+        stage('Publish Test Results') {
+            steps {
+                echo 'Publishing TestNG/Surefire XML results...'
+                junit testResults: "${TEST_DIR}/target/surefire-reports/*.xml",
+                      allowEmptyResults: true
+            }
+        }
+
+        // ─────────────────────────────────────────────
+        // STAGE 7: Generate Allure Report
         // ─────────────────────────────────────────────
         stage('Generate Allure Report') {
             steps {
                 echo 'Generating Allure Report...'
                 allure([
                     includeProperties: false,
-                    jdk: '',
+                    jdk              : '',
                     reportBuildPolicy: 'ALWAYS',
-                    results: [[path: "${ALLURE_RESULTS}"]]
+                    results          : [[path: "${ALLURE_RESULTS}"]]
                 ])
             }
         }
@@ -154,34 +167,38 @@ pipeline {
                     kill $PID 2>/dev/null || true
                     rm -f app.pid
                     echo "App with PID $PID stopped."
+                else
+                    echo "No PID file found, app may not have started."
                 fi
             '''
 
-            // Archive test artifacts
-            archiveArtifacts artifacts: 'test-results/**/*', allowEmptyArchive: true
-            archiveArtifacts artifacts: 'app.log', allowEmptyArchive: true
+            // Archive surefire reports and app logs
+            archiveArtifacts artifacts: "${TEST_DIR}/target/surefire-reports/**/*",
+                             allowEmptyArchive: true
+            archiveArtifacts artifacts: 'app.log',
+                             allowEmptyArchive: true
 
-            // Publish Playwright HTML report if exists
+            // Publish TestNG HTML report
             publishHTML(target: [
                 allowMissing         : true,
                 alwaysLinkToLastBuild: true,
                 keepAll              : true,
-                reportDir            : "${TEST_DIR}/playwright-report",
+                reportDir            : "${TEST_DIR}/target/surefire-reports",
                 reportFiles          : 'index.html',
-                reportName           : 'Playwright HTML Report'
+                reportName           : 'TestNG Surefire Report'
             ])
         }
 
         success {
-            echo "✅ Pipeline PASSED — All tests completed successfully!"
+            echo "✅ Pipeline PASSED — All regression tests completed successfully!"
         }
 
         failure {
-            echo "❌ Pipeline FAILED — Check Allure report and logs for details."
+            echo "❌ Pipeline FAILED — Check Allure report and app.log for details."
         }
 
         unstable {
-            echo "⚠️  Pipeline UNSTABLE — Some tests failed. Review Allure report."
+            echo "⚠️  Pipeline UNSTABLE — Some tests failed. Review Allure and Surefire reports."
         }
     }
 }
